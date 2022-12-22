@@ -1,6 +1,6 @@
 # Part 1: A Basic Sprite
 
-We're going to program a top-down, [Stardew Valley](https://en.wikipedia.org/wiki/Stardew_Valley)-style game in Rust. Rust is a strongly typed, systems programming language, a spiritual successor to C++ that's been getting a lot of goodwill in programming communities. We'll use the [Bevy library](https://bevyengine.org) to program the game from scratch.
+We're going to program a top-down, [Stardew Valley](https://en.wikipedia.org/wiki/Stardew_Valley)-style game in [Rust](https://www.rust-lang.org). Rust is a strongly typed, systems programming language, a spiritual successor to C++ that's been getting a lot of goodwill in programming communities. We'll use the [Bevy library](https://bevyengine.org) to program the game from scratch.
 
 First, install [Rust](https://www.rust-lang.org) and [Bevy](https://bevyengine.org). Do the Bevy [tutorial](https://bevyengine.org/learn/book/getting-started/) (until you get to "Next Steps" section).[^note1] Setup a project with a single file with the following code:
 

@@ -7,3 +7,4 @@ title = "Learn Game Development in Rust with Bevy"
 
 [output.html]
 curly-quotes = true
+git-repository-url = "https://github.com/ianarawjo/rust-game-bevy"
