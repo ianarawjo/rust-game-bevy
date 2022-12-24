@@ -147,7 +147,12 @@ Now run your code, and voila:
 
 ## Conclusion
 
-Compared to the Part 2, this part was surprisingly short and simple. A lot of that has to do with the way we setup animations, and the power of our `SpritesheetAnimator` model. In the future, we will likely want to move most of this logic out of our keyboard input handler and into its own system for `Character` component entities, so we can easily add more characters and have them follow similar movement animation logic. 
+Compared to the Part 2, this part was surprisingly short and simple. A lot of that has to do with the way we setup animations, and the power of our `SpritesheetAnimator` model. You might have noticed we didn't touch the `Direction` component we setup in Part 1. In the future, we will want to move most of our animation and movement logic out of our keyboard input handler and into its own system for `Character` component entities, so we can easily add more characters and have them follow similar logic. A `Direction` property (or some version of it) will become important. For now, though, bask in the joy of what you've accomplished thus far! :)
+
+-------------
+
+### Code
+[Get the finished code for this part.](game_code/chapter_3.rs)
 
 ### Footnotes
 

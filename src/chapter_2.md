@@ -353,3 +353,8 @@ We might change this code later, but it's good to see the results of our hard wo
 ## Conclusion
 
 Whew, that was a lot. In Part 3, we'll cover movement, extend our `Direction` component to capture what direction a character is facing, and separate input from animation.
+
+-------------
+
+### Code
+[Get the finished code for this part.](game_code/chapter_2.rs)

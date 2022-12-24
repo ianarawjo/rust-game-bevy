@@ -243,6 +243,9 @@ See you next time!
 
 -------------
 
+### Code
+[Get the finished code for this part.](game_code/chapter_1.rs)
+
 ### Footnotes
 
 [^note1]: Also see the extremely useful reference guide, the [Bevy Cheatbook](https://bevy-cheatbook.github.io/tutorial.html). Whenever you are confused or simply want more information about a Bevy concept, check it out!
