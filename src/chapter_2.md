@@ -81,7 +81,7 @@ struct SpritesheetAnimator {
 }
 ```
 
-The `SpriteAnimator` contains all of the animations for a particular sprite ("`states`") as mappings from names of the state, to a particular animation ("`SpritesheetAnimation`"). Each `SpritesheetAnimation` describes a series of frames as indices of the sprite's `TextureAtlas`, the speed of the animation ("`fps`") and what to do when it reaches the end of play ("`looping`").
+The `SpritesheetAnimator` contains all of the animations for a particular sprite ("`states`") as mappings from names of the state, to a particular animation ("`SpritesheetAnimation`"). Each `SpritesheetAnimation` describes a series of frames as indices of the sprite's `TextureAtlas`, the speed of the animation ("`fps`") and what to do when it reaches the end of play ("`looping`").
 
 Now let's add a `SpriteAnimator` that contains the animations for our player character sprite. For now, let's just worry about the "stand-down" and "move-down" animations. How do we load and encode these in Bevy?
 

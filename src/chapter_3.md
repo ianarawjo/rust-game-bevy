@@ -1,181 +1,154 @@
-# Part 3: Character character_movement
+# Part 3: Character movement
 
-In Part 2, we ...
+In Part 2, we covered spritesheet animation, and had our character change their "move" animation in response to arrow key presses:
 
-## "Facing" and Direction
+![Thomas rotates in eight directions](images/thomas-rotate.gif)
 
-In Part 1, we added a `Direction` component as an enum with 8 cardinal directions:
+But there's a problem: our character isn't actually moving! (And, if we want the character to stop and stand still, we can't do that, either.) Let's fix this.
 
-```rust
-#[derive(Component)]
-enum Direction {
-    N, NE, E, SE, S, SW, W, NW,
-}
-```
+## Moving in response to keyboard input
 
-But this way of formatting direction is actually slightly annoying: it contains two pieces of information, the "horizontal" (East or West) and the "vertical" (North or South) directions. If we want to change one of these directions, we have to worry about the other. It's cleaner to separate these two directions out:
+Changing our code to make our character move is actually surprisingly simple, at least compared to the complexity of code we added in Part 2. All we have to do is modify the `player_input` event to:
+- gain access to the player entity's `Transform` component,
+- gain access to the system's update speed, so we can ensure the frame rate of the user's hardware doesn't affect the movement speed
 
-```rust
-enum HorizontalDirection {
-    East, West, None,
-}
-enum VerticalDirection {
-    North, South, None,
-}
-
-#[derive(Component)]
-struct Direction {
-    hor: HorizontalDirection,
-    vert: VerticalDirection
-}
-```
-
-Now when we want to change the horizontal direction (say, from East to West), we don't need to worry about the vertical direction, and vice-versa.[^note1] We can use this new `Direction` to specify where our character sprite is "facing," but also other things, like the state of a gamepad thumb stick.
-
-But how do we tell what the "default" direction is? Above, we haven't specified the default direction as `hor`=`None`, `vert`=`None`. To set this, we can use the [Default](https://doc.rust-lang.org/stable/std/default/trait.Default.html) trait in Rust:
-
-```rust
-#[derive(Default)]
-enum HorizontalDirection {
-    East,
-    West,
-    #[default]
-    None,
-}
-
-#[derive(Default)]
-enum VerticalDirection {
-    North,
-    South,
-    #[default]
-    None,
-}
-
-#[derive(Component, Default)]
-struct Direction {
-    hor: HorizontalDirection,
-    vert: VerticalDirection
-}
-```
-
-Now `None` is specified as the default for both enums. The struct `Direction`, appended with the `Default` trait, will automatically set `hor` and `vert` properties to `None`. (Notice that to add "Default" to our `#[derive(...)]` directive, we tacked it after Component, using a comma.)
-
-Our code might be getting cluttered already, but we'll worry about refactoring it later.
-
-## Movement function
-
-With our better `Direction` component in tow, we can amend our `move_character` function to:
-- read what arrow keys are being pressed, and
-- update the player character's `Direction` accordingly
-
-Recall that our current movement function is something like:
-
-```rust
-fn move_character (keyboard_input: Res<Input<KeyCode>>,
-                   mut query: Query<&mut Transform, With<Player>>) {
-    let mut player_transform = query.single_mut();
-
-    if keyboard_input.pressed(KeyCode::Left) {
-        info!("'Left arrow' currently pressed");
-        player_transform.translation.x -= 1.0
-    }
-
-    if keyboard_input.just_pressed(KeyCode::Left) {
-        info!("'Left arrow' just pressed");
-    }
-
-    if keyboard_input.just_released(KeyCode::Left) {
-        info!("'Left arrow' just released");
-    }
-}
-```
-
-I didn't say much about `just_pressed` and `just_released` before, but they're important, arguably more so than basic `pressed`.[^note2] In the end, we don't want to directly move our character sprite in this function ---other things, like character animation, might need to trigger here, and the movement could be dependent on the current game state, collisions, etc. In fact, we'd do better to rename the function and not be able to access `Transform` at all, only `Direction`:
+We can accomplish both by adding a Bevy [`Time` resource](https://bevy-cheatbook.github.io/features/time.html) to our method parameter, and a `&mut Transform` component to our query. Our new method signature is:
 
 ```rust
 fn player_input (keyboard_input: Res<Input<KeyCode>>,
-                 mut query: Query<&mut Direction, With<Player>>) {
-    ...
+                 time: Res<Time>,
+                 mut query: Query<(&mut SpritesheetAnimator,
+                                   &mut TextureAtlasSprite,
+                                   &mut Transform),
+                                   With<Player>>) {
+    let (mut animator,
+         mut sprite,
+         mut transform) = query.single_mut();
+
+    // body of method goes here //
 }
 ```
 
-...
-
-Why do this? Well, there might be other ways we could set the player's `Direction` --such as cutscenes, gamepad input, or long chats with career counselors. How the player character displays in response to `Direction` should be in a separate System, so we only have to define it once:
+To move our character in response to input, we want to setup some variables to set the movement "speed" as a float, the move direction as a unit vector in 2D space (a 2D vector of max length 1), the update delta (in seconds), and a place to store our final compiled movement vector:
 
 ```rust
-fn character_movement (mut query: Query<(&mut Transform, &mut Direction), With<Character>>) {
-    // Read the character's Direction, and change its state in response
-    ...
+let move_speed: f32 = 32.0; // a constant (for now)
+let mut move_dir: (f32, f32) = (0.0, 0.0); // (x_delta, y_delta)
+let move_delta: (f32, f32); // will be (move_dir * move_speed) * time_delta
+let time_delta: f32 = time.delta_seconds();
+```
+
+`move_delta` will equal (move_dir * move_speed) * time_delta.[^note1]
+
+Now we're ready to amend our "facing" update logic. Recall that our current code looks like:
+
+```rust
+let mut facing: &str = "";
+if left_pressed {
+    if up_pressed {
+        facing = "move-up-left";
+    } else if down_pressed {
+        facing = "move-down-left";
+    } else {
+        facing = "move-left";
+    }
+} else if right_pressed {
+    if up_pressed {
+        facing = "move-up-right";
+    } else if down_pressed {
+        facing = "move-down-right";
+    } else {
+        facing = "move-right";
+    }
+} else if up_pressed {
+    facing = "move-up";
+} else if down_pressed {
+    facing = "move-down";
 }
 ```
 
-Notice anything odd about this statement? I didn't use `Player` here ---I used a new Component, `Character`. Why?
+How should we modify this to update our move variables? Well, we only need to update `move_dir` (the unit vector) to point it in the direction of the movement. You can probably figure this out yourself: **try it!**
 
-A `Player` is special kind of `Character` in our game, one that we play as and control. But there may be many other characters (NPCs, short for non-player-character), which behave similarly to the player ---they have a direction they are facing in, can move, animate, etc. To save time, the behavior of all entities with a `Character` component should be described in a single function ("System").
-
-Let's first define a `Character` component:
+Done? You should end up with something like this:
 
 ```rust
-#[derive(Component)]
-struct Character {
-    facing: Direction,
-    moving: Direction,
-    speed: f32,
-    name: String,
+let mut facing: &str = "";
+if left_pressed {
+    if up_pressed {
+        facing = "move-up-left";
+        move_dir = (-0.71, 0.71);
+    } else if down_pressed {
+        facing = "move-down-left";
+        move_dir = (-0.71, -0.71);
+    } else {
+        facing = "move-left";
+        move_dir = (-1.0, 0.0);
+    }
+} else if right_pressed {
+    if up_pressed {
+        facing = "move-up-right";
+        move_dir = (0.71, 0.71);
+    } else if down_pressed {
+        facing = "move-down-right";
+        move_dir = (0.71, -0.71);
+    } else {
+        facing = "move-right";
+        move_dir = (1.0, 0.0);
+    }
+} else if up_pressed {
+    facing = "move-up";
+    move_dir = (0.0, 1.0);
+} else if down_pressed {
+    facing = "move-down";
+    move_dir = (0.0, -1.0);
 }
 ```
 
-Once again, we'd like to set defaults for `Character`s, like what direction it is facing in when it is spawned. To do this, we can `impl Default` (add after the definition for `Character`):
+(Here, I use `0.71` on diagonal movements, as the "length" of this unit vector, which is calculated with an equation like `sqrt(x^2 + y^2)`, totals roughly `1.0`. If we used `1.0` instead, the unit vector would have a length greater than `1.0`, and the character would appear to run faster when moving diagonally relative to one-directional movement.)
+
+Right after this code, we can compute the `move_delta` with some simple logic, and then apply it directly to the player entity's transform:
 
 ```rust
-impl Default for Character {
-    // By default, Characters face south (down) and don't move:
-    fn default() -> Self { Character {
-        facing: Direction {
-            hor: HorizontalDirection::None, vert: VerticalDirection::South },
-        moving: Direction {
-            hor: HorizontalDirection::None, vert: VerticalDirection::None },
-        speed: 0.0,
-        name: "Unnamed".to_string(),
-    }}
+// :: Move character ::
+// How far to move the character, in pixel coords:
+move_delta = (move_dir.0 * move_speed * time_delta,
+              move_dir.1 * move_speed * time_delta);
+// Apply move delta to character position:
+transform.translation.x += move_delta.0;
+transform.translation.y += move_delta.1;
+```
+
+Run this code. You should see movement, with one problem: the character animation doesn't change to standing when you aren't touching the arrow keys. There is actually a surprisingly simple fix for this, given the way we've named the animation states ("move-up", "stand-up", and so on). **Can you think of a simple way to fix your existing code to get the character to stand still when a key isn't pressed?**
+
+## Stop moving when no keys are pressed
+
+What I did was amend our existing `if` statement on `facing` with an `else if` for the case when no keys are pressed. Within that block, we can check if the character is currently in a "move-"ing state, and if so, change it to "stand-" state by replacing the prefix "move" with "stand" in the `animator.cur_state` string:
+
+```rust
+// If a key is pressed and the state would change, update the anim:
+if facing.len() > 0 && animator.cur_state != facing.to_string() {
+    animator.set_state(facing.to_string(), &mut sprite);
+// If a key isn't pressed...
+} else if facing.len() == 0 {
+    // check if the character animation is in a 'move'ing state,
+     if animator.cur_state.starts_with("move") {
+        // and if it is, set animator to the corresponding 'stand' state:
+        let stand_state = "stand".to_string() + &animator.cur_state[4..].to_string();
+        animator.set_state(stand_state, &mut sprite);
+     }
 }
 ```
 
-Now when we spawn our player character, we can give him a name:
+(This depends on your states being named the same as Part 2.)
 
-```rust
-commands.spawn((
-    Player,
-    Character {
-        name: "Thomas".to_string(),
-        ..default()
-    },
-    SpriteBundle {
-        texture: asset_server.load("images/thomas_stand.png"),
-        ..default()  // Set remaining arguments to their default values
-    },
-));
-```
+Now run your code, and voila:
 
-and he will spawn facing down by default.
-
-Notice that I've removed the `Direction` property ---this is now contained as a property of the `Character` component. We must change our `player_input` function accordingly:
-
-```rust
-fn player_input (keyboard_input: Res<Input<KeyCode>>,
-                 mut query: Query<&mut Character, With<Player>>) {
-    let mut player_character = query.single_mut();
-    ...
-}
-```
+![Player character moves in eight directions](images/thomas-movement.gif)
 
 ## Conclusion
 
-...
+Compared to the Part 2, this part was surprisingly short and simple. A lot of that has to do with the way we setup animations, and the power of our `SpritesheetAnimator` model. In the future, we will likely want to move most of this logic out of our keyboard input handler and into its own system for `Character` component entities, so we can easily add more characters and have them follow similar movement animation logic. 
 
 ### Footnotes
 
-[^note1]: What is the direction when both properties are "None"? This depends on the use case, but we include this possibility here to, for instance, encode the base state of the thumb stick of a gamepad. Our character sprite must always face in a direction, but we can read "None" as facing down/south.
-
-[^note2]: In fact, without Bevy, we might have to code the logic for the  `just_pressed` and `just_released` events ourselves ---which can be time-consuming and (sometimes) tricky. We're lucky we have Bevy to handle these common events for us.
+[^note1]: Another term for (move_dir * move_speed) is velocity.
