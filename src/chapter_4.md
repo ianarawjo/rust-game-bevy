@@ -38,6 +38,14 @@ struct Velocity {
     x: f32,
     y: f32,
 }
+impl Velocity {
+    fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+    fn zero() -> Self {
+        Self { x: 0.0, y: 0.0 }
+    }
+}
 ```
 
 and write a system that operates on all entities with a `Velocity` and a `Transform`:
@@ -95,12 +103,11 @@ struct Character {
 }
 ```
 
-But what is the type of the `HashMap`'s values? Well, we said above that a character's state involves three things: an animation state, a frame rate for the animation to run at, and a movement vector (a velocity). We can separate this out into a struct, `CharacterState`:
+But what is the type of the `HashMap`'s values? Well, we said above that a character's state involves two things: an animation state, and a movement vector (a velocity). We can separate this out into a struct, `CharacterState`:
 
 ```rust
 struct CharacterState {
     animation: String,
-    fps: f32,
     movement: Velocity,
 }
 ```
@@ -118,6 +125,23 @@ struct Character {
 }
 ```
 
+We should also add a constructor, so we don't have to worry about setting `cur_state` and `prev_state` manually:
+
+```rust
+impl Character {
+    fn new(states: HashMap<String, CharacterState>, start_state: String) -> Self {
+        match states.get(&start_state) {
+            Some(state) => Self {
+                states,
+                cur_state: start_state,
+                prev_state: "".to_string(),
+            },
+            None => panic!("Start state {} not found", start_state)
+        }
+    }
+}
+```
+
 Now we will write a system which (1) detects changes to a `Character`'s state `cur_state`, and (2) updates an entity's `SpritesheetAnimator` and `Velocity` components ---not just for our player, but *for any character* in the game:
 
 ```rust
@@ -126,17 +150,19 @@ fn update_character_state(
 ) {
 	for (mut character, mut animator, mut sprite, mut velocity) in query.iter_mut() {
 		// Check if cur_state differs from prev_state
-        if character.cur_state == character.prev_state { continue; }
+        if character.cur_state == character.prev_state { continue; };
 
         // Update the state by changing animator and transforms:
-        new_state: CharacterState = states.get(&character.cur_state);
-        if let Some(char_state) = new_state {
-            animator.set_state(char_state.animation, sprite, char_state.fps);
-            velocity.x = char_state.velocity.x;
-            velocity.y = char_state.velocity.y;
+        if let Some(char_state) = character.states.get(&character.cur_state) {
+            animator.set_state(
+                String::from(char_state.animation),
+                &mut sprite,
+                None);
+            velocity.x = char_state.movement.x;
+            velocity.y = char_state.movement.y;
         }
 
-        character.prev_state = character.cur_state;
+        character.prev_state = String::from(character.cur_state);
     }
 }
 ```
@@ -153,11 +179,301 @@ Let's spawn a friend for Thomas to interact with. Our second character will be M
 
 How do we spawn Missy in code? Of course we update our `setup` system, but do we have to do anything special outside of what we've done for Thomas?
 
-**No!** We don't! That's amazing --effectively, both Thomas and Missy will be seen as `Character`s. Only the `Player` flag on Thomas' character entity will distinguish him from Missy. (In fact, if we wanted to change characters mid-game, all we'll have to do is remove the `Player` component from the Thomas entity and give it to the Missy entity! By the end of this lesson, we'll have done exactly this ---to change who we're playing as by pressed the Space bar.)
+**No!** We don't! That's amazing --effectively, both Thomas and Missy will be seen as `Character`s. Only the `Player` flag on Thomas' character entity will distinguish him from Missy. (In fact, if we wanted to change characters mid-game, all we'll have to do is remove the `Player` component from the Thomas entity and give it to the Missy entity! By the end of this lesson, we'll have done exactly this ---to change who we're playing simply by pressing the Space bar.)
 
+First, we have to update our `setup` code to add `Character` and `Velocity` components. First define two helpful constants:
 
+```rust
+const WALK_SPEED: f32 = 32.0;
+const DIAG: f32 = 0.71;
+```
 
-... WIP ...
+Our `Character` component is then the lengthy:
+
+```rust
+Character::new(HashMap::from([
+    ("stand-down".to_string(), CharacterState {
+        animation: "stand-down".to_string(), movement: Velocity::zero()}),
+    ("stand-down-left".to_string(), CharacterState {
+        animation: "stand-down-left".to_string(), movement: Velocity::zero()}),
+    ("stand-left".to_string(), CharacterState {
+        animation: "stand-left".to_string(), movement: Velocity::zero()}),
+    ("stand-up-left".to_string(), CharacterState {
+        animation: "stand-up-left".to_string(), movement: Velocity::zero()}),
+    ("stand-up".to_string(), CharacterState {
+        animation: "stand-up".to_string(), movement: Velocity::zero()}),
+    ("stand-up-right".to_string(), CharacterState {
+        animation: "stand-up-right".to_string(), movement: Velocity::zero()}),
+    ("stand-right".to_string(), CharacterState {
+        animation: "stand-right".to_string(), movement: Velocity::zero()}),
+    ("stand-down-right".to_string(), CharacterState {
+        animation: "stand-down-right".to_string(), movement: Velocity::zero()}),
+    ("move-down".to_string(), CharacterState {
+        animation: "move-down".to_string(),
+        movement: Velocity::new(0.0, -WALK_SPEED)}),
+    ("move-down-left".to_string(), CharacterState {
+        animation: "move-down-left".to_string(),
+        movement: Velocity::new(-DIAG*WALK_SPEED, -DIAG*WALK_SPEED)}),
+    ("move-left".to_string(), CharacterState {
+        animation: "move-left".to_string(),
+        movement: Velocity::new(-WALK_SPEED, 0.0)}),
+    ("move-up-left".to_string(), CharacterState {
+        animation: "move-up-left".to_string(),
+        movement: Velocity::new(-DIAG*WALK_SPEED, DIAG*WALK_SPEED)}),
+    ("move-up".to_string(), CharacterState {
+        animation: "move-up".to_string(),
+        movement: Velocity::new(0.0, WALK_SPEED)}),
+    ("move-up-right".to_string(), CharacterState {
+        animation: "move-up-right".to_string(),
+        movement: Velocity::new(DIAG*WALK_SPEED, DIAG*WALK_SPEED)}),
+    ("move-right".to_string(), CharacterState {
+        animation: "move-right".to_string(),
+        movement: Velocity::new(WALK_SPEED, 0.0)}),
+    ("move-down-right".to_string(), CharacterState {
+        animation: "move-down-right".to_string(),
+        movement: Velocity::new(DIAG*WALK_SPEED, -DIAG*WALK_SPEED)}),
+]), "stand-down".to_string())
+```
+
+We also add a `Velocity` component, which is just
+
+```rust
+Velocity::zero()
+```
+
+(It is actually getting pretty tedious to specify detailed information on states and animations in our `setup` function. Very shortly, we'll want to offload these specifications to JSON files or separate Rust files.)
+
+We will now remove much of what we added to `player_input` in Part 3, since this logic has now been dispersed into the `Vector` and `Character` components and their corresponding systems. Our updated method is closer to what we had in Part 2:
+
+```rust
+fn player_input (keyboard_input: Res<Input<KeyCode>>,
+                 mut query: Query<&mut Character,
+                                   With<Player>>) {
+
+    let mut player = query.single_mut();
+
+    let (left_pressed, up_pressed, right_pressed, down_pressed) =
+        (keyboard_input.pressed(KeyCode::Left), keyboard_input.pressed(KeyCode::Up),
+        keyboard_input.pressed(KeyCode::Right), keyboard_input.pressed(KeyCode::Down));
+
+    let mut facing: &str = "";
+    if left_pressed {
+        if up_pressed {
+            facing = "move-up-left";
+        } else if down_pressed {
+            facing = "move-down-left";
+        } else {
+            facing = "move-left";
+        }
+    } else if right_pressed {
+        if up_pressed {
+            facing = "move-up-right";
+        } else if down_pressed {
+            facing = "move-down-right";
+        } else {
+            facing = "move-right";
+        }
+    } else if up_pressed {
+        facing = "move-up";
+    } else if down_pressed {
+        facing = "move-down";
+    }
+
+    // :: Change character animation ::
+    // If a key is pressed and the state would change, update the anim:
+    if facing.len() > 0 && player.cur_state != facing.to_string() {
+        player.cur_state = facing.to_string();
+    // If a key isn't pressed...
+    } else if facing.len() == 0 {
+        // check if the character is in a 'move'ing state,
+         if player.cur_state.starts_with("move") {
+            // and if it is, set character to the corresponding 'stand' state:
+            let stand_state = "stand".to_string() + &player.cur_state[4..].to_string();
+            player.cur_state = stand_state;
+         }
+    }
+}
+```
+
+Run this code. You should see exactly what you had at the end of Part 3. That might not feel like an improvement... yet.
+
+### Cloning character data
+
+To see the full power of what we've done, let's add a second character. In `setup`, we have to extract out our animator and character component specifications to reuse them two times: once for Thomas, once for Missy. But to do this, because of how Rust works with borrowing, we must implement `Clone` traits for our `SpritesheetAnimation` and `CharacterState` structs:
+
+```rust
+impl Clone for SpritesheetAnimation {
+    fn clone(&self) -> Self {
+        Self {
+            frames: self.frames.clone(),
+            fps: self.fps,
+            looping: self.looping,
+        }
+    }
+}
+
+impl Clone for CharacterState {
+    fn clone(&self) -> Self {
+        Self {
+            animation: self.animation.clone(),
+            movement: self.movement.clone(),
+        }
+    }
+}
+```
+
+This involves adding `Clone` and `Copy` traits to our `AnimationStyle` enum:
+
+```rust
+#[derive(Clone, Copy)]
+enum AnimationStyle {
+    Once,    // Play once and end at last frame
+    Looping, // Loop from frame 1 to n, then from 1 to n, ad infinitum
+}
+```
+
+and `Clone` to `Velocity`:
+
+```rust
+impl Clone for Velocity {
+    fn clone(&self) -> Self {
+        Self { x: self.x, y: self.y }
+    }
+}
+```
+
+### Using clone in `setup`
+
+Now we can use `clone` when defining character entities. First, we load a second texture for Missy:
+
+```rust
+let thomas_texture =
+    TextureAtlas::from_grid(asset_server.load("images/thomas_walk.png"),
+                            Vec2::new(16.0, 32.0),
+                            15, 1, None, None);
+let missy_texture =
+    TextureAtlas::from_grid(asset_server.load("images/missy_walk.png"),
+                            Vec2::new(16.0, 32.0),
+                            15, 1, None, None);
+let thomas_tex_handle = texture_atlases.add(thomas_texture);
+let missy_tex_handle = texture_atlases.add(missy_texture);
+```
+
+Then we move our animator and character state `HashMap`s to local variables (press the eye in the top-right corner to see the full code):
+
+```rust
+// * Character animations and states *
+# const WALK_SPEED: f32 = 32.0;
+# const DIAG: f32 = 0.71;
+# let char_animations = HashMap::from([
+#     ("stand-down".to_string(), SpritesheetAnimation::from_frames(vec![1])),
+#     ("stand-down-left".to_string(), SpritesheetAnimation::from_frames(vec![4])),
+#     ("stand-left".to_string(), SpritesheetAnimation::from_frames(vec![7])),
+#     ("stand-up-left".to_string(), SpritesheetAnimation::from_frames(vec![10])),
+#     ("stand-up".to_string(), SpritesheetAnimation::from_frames(vec![13])),
+#     ("stand-up-right".to_string(), SpritesheetAnimation::from_frames(vec![-10])),
+#     ("stand-right".to_string(), SpritesheetAnimation::from_frames(vec![-7])),
+#     ("stand-down-right".to_string(), SpritesheetAnimation::from_frames(vec![-4])),
+#     ("move-down".to_string(), SpritesheetAnimation::from_frames(vec![1, 2, 1, 3])),
+#     ("move-down-left".to_string(), SpritesheetAnimation::from_frames(vec![4, 5, 4, 6])),
+#     ("move-left".to_string(), SpritesheetAnimation::from_frames(vec![7, 8, 7, 9])),
+#     ("move-up-left".to_string(), SpritesheetAnimation::from_frames(vec![10, 11, 10, 12])),
+#     ("move-up".to_string(), SpritesheetAnimation::from_frames(vec![13, 14, 13, 15])),
+#     ("move-up-right".to_string(), SpritesheetAnimation::from_frames(vec![-10, -11, -10, -12])),
+#     ("move-right".to_string(), SpritesheetAnimation::from_frames(vec![-7, -8, -7, -9])),
+#     ("move-down-right".to_string(), SpritesheetAnimation::from_frames(vec![-4, -5, -4, -6])),
+# ]);
+#
+# let char_states = HashMap::from([
+#     ("stand-down".to_string(), CharacterState {
+#         animation: "stand-down".to_string(), movement: Velocity::zero()}),
+#     ("stand-down-left".to_string(), CharacterState {
+#         animation: "stand-down-left".to_string(), movement: Velocity::zero()}),
+#     ("stand-left".to_string(), CharacterState {
+#         animation: "stand-left".to_string(), movement: Velocity::zero()}),
+#     ("stand-up-left".to_string(), CharacterState {
+#         animation: "stand-up-left".to_string(), movement: Velocity::zero()}),
+#     ("stand-up".to_string(), CharacterState {
+#         animation: "stand-up".to_string(), movement: Velocity::zero()}),
+#     ("stand-up-right".to_string(), CharacterState {
+#         animation: "stand-up-right".to_string(), movement: Velocity::zero()}),
+#     ("stand-right".to_string(), CharacterState {
+#         animation: "stand-right".to_string(), movement: Velocity::zero()}),
+#     ("stand-down-right".to_string(), CharacterState {
+#         animation: "stand-down-right".to_string(), movement: Velocity::zero()}),
+#     ("move-down".to_string(), CharacterState {
+#         animation: "move-down".to_string(),
+#         movement: Velocity::new(0.0, -WALK_SPEED)}),
+#     ("move-down-left".to_string(), CharacterState {
+#         animation: "move-down-left".to_string(),
+#         movement: Velocity::new(-DIAG*WALK_SPEED, -DIAG*WALK_SPEED)}),
+#     ("move-left".to_string(), CharacterState {
+#         animation: "move-left".to_string(),
+#         movement: Velocity::new(-WALK_SPEED, 0.0)}),
+#     ("move-up-left".to_string(), CharacterState {
+#         animation: "move-up-left".to_string(),
+#         movement: Velocity::new(-DIAG*WALK_SPEED, DIAG*WALK_SPEED)}),
+#     ("move-up".to_string(), CharacterState {
+#         animation: "move-up".to_string(),
+#         movement: Velocity::new(0.0, WALK_SPEED)}),
+#     ("move-up-right".to_string(), CharacterState {
+#         animation: "move-up-right".to_string(),
+#         movement: Velocity::new(DIAG*WALK_SPEED, DIAG*WALK_SPEED)}),
+#     ("move-right".to_string(), CharacterState {
+#         animation: "move-right".to_string(),
+#         movement: Velocity::new(WALK_SPEED, 0.0)}),
+#     ("move-down-right".to_string(), CharacterState {
+#         animation: "move-down-right".to_string(),
+#         movement: Velocity::new(DIAG*WALK_SPEED, -DIAG*WALK_SPEED)}),
+# ]);
+```
+
+With this setup in mind, defining two characters is easy. We just spawn two entities and use `char_animations` and `char_states` once for each characters, applying `clone`:
+
+```rust
+// * Spawn characters *
+// Thomas
+commands.spawn((
+    Player,
+    SpriteSheetBundle {
+        texture_atlas: thomas_tex_handle,
+        ..default()
+    },
+    SpritesheetAnimator::new(
+        char_animations.clone(),
+        "move-down".to_string()
+    ),
+    Character::new(
+        char_states.clone(),
+        "stand-down".to_string()),
+    Velocity::zero(),
+));
+
+// Missy
+commands.spawn((
+    SpriteSheetBundle {
+        texture_atlas: missy_tex_handle,
+        transform: Transform::from_xyz(20., 20., 0.),
+        ..default()
+    },
+    SpritesheetAnimator::new(
+        char_animations.clone(),
+        "move-down".to_string()
+    ),
+    Character::new(
+        char_states.clone(),
+        "stand-down".to_string()),
+    Velocity::zero(),
+));
+```
+
+>**Note:** Had we included a second `Player` component to Missy's entity, what would have happened?
+
+Notice we added a `Transform` so that Missy starts at a position slight away from us. Running this code, you should see:
+
+![A second character, Missy, appears above and to the right of Thomas](images/missy-spawned.png)
+
+Move around a bit. [...]
 
 ## Conclusion
 

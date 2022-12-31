@@ -67,15 +67,20 @@ impl SpritesheetAnimator {
             },
         }
     }
-    fn set_state(&mut self, state_name: String, sprite: &mut TextureAtlasSprite) -> bool {
+    fn set_state(&mut self,
+        state_name: String,
+        sprite: &mut TextureAtlasSprite,
+        fps_override: Option<f32>, // Optional. Provide a different frame rate.
+    ) -> bool {
         match self.states.get(&state_name) {
             Some(state) => {
-                if state.fps as f32 == 0.0 {
+                let fps = if let Some(fps_o) = fps_override {fps_o} else {state.fps};
+                if fps as f32 == 0.0 {
                     panic!("Frames per second must be positive, nonzero value")
                 }
                 self.cur_state = state_name;
                 self.cur_frame_idx = 0;
-                self.timer = AnimationTimer(Timer::from_seconds(1.0 / state.fps,
+                self.timer = AnimationTimer(Timer::from_seconds(1.0 / fps,
                                             TimerMode::Repeating));
                 // Set the sprite frame and x-flip value
                 if let Some(texture_idx) = state.frames.get(0) {
@@ -265,14 +270,14 @@ fn player_input (keyboard_input: Res<Input<KeyCode>>,
     // :: Change character animation ::
     // If a key is pressed and the state would change, update the anim:
     if facing.len() > 0 && animator.cur_state != facing.to_string() {
-        animator.set_state(facing.to_string(), &mut sprite);
+        animator.set_state(facing.to_string(), &mut sprite, None);
     // If a key isn't pressed...
     } else if facing.len() == 0 {
         // check if the character animation is in a 'move'ing state,
          if animator.cur_state.starts_with("move") {
             // and if it is, set animator to the corresponding 'stand' state:
             let stand_state = "stand".to_string() + &animator.cur_state[4..].to_string();
-            animator.set_state(stand_state, &mut sprite);
+            animator.set_state(stand_state, &mut sprite, None);
          }
     }
 }

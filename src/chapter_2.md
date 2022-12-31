@@ -279,15 +279,20 @@ impl SpritesheetAnimator {
 
     ...
 
-    fn set_state(&mut self, state_name: String, sprite: &mut TextureAtlasSprite) -> bool {
+    fn set_state(&mut self,
+        state_name: String,
+        sprite: &mut TextureAtlasSprite,
+        fps_override: Option<f32>, // Optional. Provide a different frame rate.
+    ) -> bool {
         match self.states.get(&state_name) {
             Some(state) => {
-                if state.fps as f32 == 0.0 {
+                let fps = if let Some(fps_o) = fps_override {fps_o} else {state.fps};
+                if fps as f32 == 0.0 {
                     panic!("Frames per second must be positive, nonzero value")
                 }
                 self.cur_state = state_name;
                 self.cur_frame_idx = 0;
-                self.timer = AnimationTimer(Timer::from_seconds(1.0 / state.fps,
+                self.timer = AnimationTimer(Timer::from_seconds(1.0 / fps,
                                             TimerMode::Repeating));
                 // Set the sprite frame and x-flip value
                 if let Some(texture_idx) = state.frames.get(0) {

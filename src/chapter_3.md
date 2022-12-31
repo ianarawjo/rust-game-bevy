@@ -127,14 +127,14 @@ What I did was amend our existing `if` statement on `facing` with an `else if` f
 ```rust
 // If a key is pressed and the state would change, update the anim:
 if facing.len() > 0 && animator.cur_state != facing.to_string() {
-    animator.set_state(facing.to_string(), &mut sprite);
+    animator.set_state(facing.to_string(), &mut sprite, None);
 // If a key isn't pressed...
 } else if facing.len() == 0 {
     // check if the character animation is in a 'move'ing state,
      if animator.cur_state.starts_with("move") {
         // and if it is, set animator to the corresponding 'stand' state:
         let stand_state = "stand".to_string() + &animator.cur_state[4..].to_string();
-        animator.set_state(stand_state, &mut sprite);
+        animator.set_state(stand_state, &mut sprite, None);
      }
 }
 ```
