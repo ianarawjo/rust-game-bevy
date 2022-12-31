@@ -473,11 +473,81 @@ Notice we added a `Transform` so that Missy starts at a position slight away fro
 
 ![A second character, Missy, appears above and to the right of Thomas](images/missy-spawned.png)
 
-Move around a bit. [...]
+Move around a bit. What's wrong?
+
+### Draw order
+
+Our player character will appear "above" the Missy character, regardless of where they walk. This is because we haven't implemented **draw order** (sometimes called z-indexing) for our renderer. Bevy, unfortunately, doesn't have much consideration for draw order. To control it, we have to set the z-coordinate of a sprite's `Transform`. Z-coordinates *must be 0 or negative values for sprites render to screen*; in addition, greater z-values "draw later" than lower z-values (e.g., z-value 1 draws before z-value 4). We want our character to appear 'behind' Missy when they walk up (positive y-coordinate), and 'above' when they walk down (decreasing y-coordinate), so let's add a System like:
+
+```rust
+fn update_sprite_draw_order(mut query: Query<&mut Transform, With<TextureAtlasSprite>>) {
+    for mut transform in query.iter_mut() {
+        transform.translation.z = -transform.translation.y / 1024. - 512.;
+    }
+}
+```
+
+This makes sprites with higher y-positions "draw first" in the draw order (in Bevy, those higher on the screen), and those with lower y-positions to "draw later" (those relatively lower on the screen). I'll admit, this is somewhat hacked together ---1024 and 512 are just random values I've chosen that work; Bevy seems to stop rendering z-values that are "too low" (not sure what the cutoff is), so this puts us in a sweet spot of z-values that, for now, we won't have trouble with.
+
+We might have to return to this issue later, when adjusting camera and using tilemaps; but for now, we can forget about it, because the draw order problem should appear fixed:
+
+![Thomas character draws before Missy character based on y-coordinate](images/draw-order.gif)
+
+### Switch characters with Space bar
+
+While Missy appears with the "stand-down" sprite, she doesn't move, and we can't play as her. Let's change this to switch characters at will.
+
+All we need to do is add a System which
+1. Listens for when the Space bar is pressed
+2. Moves the `Player` component from the player character to a non-player character
+
+We can add and remove Components from an Entity in Bevy by capturing the `Entity` id in a query, and then using the `insert` and `remove` methods on `command.entity`:
+
+```rust
+fn switch_chars (keyboard_input: Res<Input<KeyCode>>,
+                mut commands: Commands,
+                query: Query<(Entity, Option<&Player>), With<Character>>) {
+
+    // Only continue if Space key is just pressed...
+    if !keyboard_input.just_pressed(KeyCode::Space) {
+        return;
+    }
+
+    // Get player and non-player entities
+    let mut player: Option<Entity> = None;
+    let mut npc: Option<Entity> = None;
+    for (ent, has_player) in query.iter() {
+        match has_player {
+            Some(_) => { player = Some(ent); },
+            None => { npc = Some(ent); }
+        }
+    }
+
+    // Swap Player components on the captured entities:
+    if let Some(player_entity) = player {
+        if let Some(npc_entity) = npc {
+            commands.entity(player_entity).remove::<Player>();
+            commands.entity(npc_entity).insert(Player);
+        }
+    }
+}
+```
+
+Then, add the system to `main`:
+
+```rust
+.add_system(switch_chars.before(player_input))
+```
+
+and voila:
+
+![Switch characters on-the-fly](images/char-swap.gif)
+
+There's some problems ---namely, your first player won't stop moving when we press the Space bar ---but these can be easily fixed with some more code.
 
 ## Conclusion
 
-...
+In this part, we abstracted away our `Character` entities so that we could add a second (or more) character sprites to our game. In the next part, while we're on the topic of characters, we might as well take a look into collision and interaction. Our goal, before getting a background, will be character collision and dialogue interactions (talking to NPCs). We will abstract away our character spawn logic a bit more, and add several more NPCs, each with dialogue event logic encoded into a JSON file.
 
 ### Footnotes
 
